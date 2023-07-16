@@ -50,8 +50,9 @@ class Books:
 
         except KeyError:
             logger.log(website.books)
+            mapper = MapperRegistry.get_current_mapper('book').all()
             return '200 OK', render('books.html', title=request.get('title'),
-                                    objects_list=website.books, categories=website.categories)
+                                    objects_list=mapper, categories=website.categories)
 
 
 @AppRoute(routes, url='/create_book/')
@@ -82,6 +83,8 @@ class CreateBook:
             book.observers.append(sms_notifier)
 
             website.books.append(book)
+            book.mark_new()
+            UnitOfWork.get_current().commit()
 
             logger.log('Book has been successfully added')
 

@@ -49,7 +49,7 @@ class Category:
         self.books = []
 
 
-class Book(Subject):
+class Book(Subject, DomainObject):
 
     def __init__(self, name, author, category):
         self.name = name
@@ -229,16 +229,79 @@ class ReaderMapper:
             raise DbDeleteException(e.args)
 
 
+# маппер для книг
+class BookMapper:
+
+    def __init__(self, connection):
+        self.connection = connection
+        self.cursor = connection.cursor()
+        self.table_name = 'book'
+
+    def all(self):
+        statement = f'SELECT * from {self.table_name}'
+        self.cursor.execute(statement)
+
+        result = []
+
+        for item in self.cursor.fetchall():
+            id, name, author, category = item
+            author = Author(author.split()[0], author.split()[1]) if len(author.split()) >= 2 else \
+                Author(author.split()[0], '')
+            category = Category(category)
+            book = Book(name, author, category)
+            result.append(book)
+
+        return result
+
+    def find_by_name(self, name):
+        statement = f"SELECT id, name, author, category FROM {self.table_name} WHERE name=?"
+        self.cursor.execute(statement, (name,))
+        result = self.cursor.fetchone()
+
+        if result:
+            return Book(*result)
+        else:
+            raise RecordNotFoundException(f'record with name={name} not found')
+
+    def insert(self, obj):
+        statement = f"INSERT INTO {self.table_name} (name, author, category) VALUES (?, ?, ?)"
+        self.cursor.execute(statement, (obj.name, obj.author, obj.category))
+        try:
+            self.connection.commit()
+        except Exception as e:
+            raise DbCommitException(e.args)
+
+    def update(self, obj):
+        statement = f"UPDATE {self.table_name} SET name=?, author=? category=? WHERE name=?"
+
+        self.cursor.execute(statement, (obj.name, obj.author, obj.category, obj.name))
+        try:
+            self.connection.commit()
+        except Exception as e:
+            raise DbUpdateException(e.args)
+
+    def delete(self, obj):
+        statement = f"DELETE FROM {self.table_name} WHERE name=?"
+        self.cursor.execute(statement, (obj.name,))
+        try:
+            self.connection.commit()
+        except Exception as e:
+            raise DbDeleteException(e.args)
+
+
 # паттерн - Data Mapper
 class MapperRegistry:
     mappers = {
         'reader': ReaderMapper,
+        'book': BookMapper,
     }
 
     @staticmethod
     def get_mapper(obj):
         if isinstance(obj, Reader):
             return ReaderMapper(connection)
+        elif isinstance(obj, Book):
+            return BookMapper(connection)
 
     @staticmethod
     def get_current_mapper(name):
